@@ -1,8 +1,8 @@
 package manager
 
 import (
-	"github.com/yourusername/storageX/internal/cloud"
-	"github.com/yourusername/storageX/internal/metadata"
+	"github.com/sayuyere/storageX/internal/cloud"
+	"github.com/sayuyere/storageX/internal/metadata"
 )
 
 type StorageManager struct {

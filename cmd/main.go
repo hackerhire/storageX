@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yourusername/storageX/internal/chunker"
-	"github.com/yourusername/storageX/internal/cloud"
-	"github.com/yourusername/storageX/internal/log"
+	"github.com/sayuyere/storageX/internal/chunker"
+	"github.com/sayuyere/storageX/internal/cloud"
+	"github.com/sayuyere/storageX/internal/log"
 )
 
 func main() {
