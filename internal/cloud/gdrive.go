@@ -70,21 +70,21 @@ func (d *DriveStorage) UploadChunk(name string, data []byte) error {
 	tmpfile, err := os.CreateTemp("", "chunk-*")
 	if err != nil {
 		log.Error("Failed to create temp file: %v", err)
-		return err
+		return WrapDriveError(ErrDriveUpload, err)
 	}
 	defer os.Remove(tmpfile.Name())
 	if _, err := tmpfile.Write(data); err != nil {
 		log.Error("Failed to write to temp file: %v", err)
-		return err
+		return WrapDriveError(ErrDriveUpload, err)
 	}
 	if _, err := tmpfile.Seek(0, 0); err != nil {
 		log.Error("Failed to seek temp file: %v", err)
-		return err
+		return WrapDriveError(ErrDriveUpload, err)
 	}
 	_, err = d.service.Files.Create(file).Media(tmpfile).Do()
 	if err != nil {
 		log.Error("Failed to upload chunk %s: %v", name, err)
-		return fmt.Errorf("failed to upload chunk: %w", err)
+		return WrapDriveError(ErrDriveUpload, err)
 	}
 	log.Info("Uploaded %s to Google Drive (folderID=%s)", name, d.folderID)
 	return nil
@@ -98,19 +98,19 @@ func (d *DriveStorage) GetChunk(name string) ([]byte, error) {
 	files, err := d.service.Files.List().Q(q).Do()
 	if err != nil || len(files.Files) == 0 {
 		log.Error("File %s not found: %v", name, err)
-		return nil, fmt.Errorf("file not found: %w", err)
+		return nil, WrapDriveError(ErrDriveDownload, err)
 	}
 	fileID := files.Files[0].Id
 	resp, err := d.service.Files.Get(fileID).Download()
 	if err != nil {
 		log.Error("Failed to download chunk %s: %v", name, err)
-		return nil, fmt.Errorf("failed to download chunk: %w", err)
+		return nil, WrapDriveError(ErrDriveDownload, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("Failed to read chunk %s: %v", name, err)
-		return nil, err
+		return nil, WrapDriveError(ErrDriveDownload, err)
 	}
 	log.Info("Downloaded %s from Google Drive", name)
 	return data, nil
@@ -124,12 +124,12 @@ func (d *DriveStorage) DeleteChunk(name string) error {
 	files, err := d.service.Files.List().Q(q).Do()
 	if err != nil || len(files.Files) == 0 {
 		log.Error("File %s not found for delete: %v", name, err)
-		return fmt.Errorf("file not found: %w", err)
+		return WrapDriveError(ErrDriveDelete, err)
 	}
 	fileID := files.Files[0].Id
 	if err := d.service.Files.Delete(fileID).Do(); err != nil {
 		log.Error("Failed to delete chunk %s: %v", name, err)
-		return fmt.Errorf("failed to delete chunk: %w", err)
+		return WrapDriveError(ErrDriveDelete, err)
 	}
 	log.Info("Deleted %s from Google Drive", name)
 	return nil
