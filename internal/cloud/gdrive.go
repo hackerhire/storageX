@@ -29,6 +29,36 @@ func NewDriveStorage() *DriveStorage {
 	return &DriveStorage{service: service}
 }
 
+func NewDriveStorageWithAuth(auth AuthConfig) *DriveStorage {
+	ctx := context.Background()
+	credsFile := auth.GoogleCredentialsFile
+	if credsFile == "" {
+		credsFile = "credentials.json"
+	}
+	service, err := drive.NewService(ctx, option.WithCredentialsFile(credsFile), option.WithScopes(drive.DriveFileScope))
+	if err != nil {
+		log.Error("Failed to create Drive service: %v", err)
+		return &DriveStorage{service: service}
+	}
+	log.Info("Google Drive service initialized with unified auth")
+	return &DriveStorage{service: service}
+}
+
+func NewDriveStorageWithAuthAndFolder(auth AuthConfig, folderID string) *DriveStorage {
+	ctx := context.Background()
+	credsFile := auth.GoogleCredentialsFile
+	if credsFile == "" {
+		credsFile = "credentials.json"
+	}
+	service, err := drive.NewService(ctx, option.WithCredentialsFile(credsFile), option.WithScopes(drive.DriveFileScope))
+	if err != nil {
+		log.Error("Failed to create Drive service: %v", err)
+		return &DriveStorage{service: service, folderID: folderID}
+	}
+	log.Info("Google Drive service initialized with unified auth and folderID=%s", folderID)
+	return &DriveStorage{service: service, folderID: folderID}
+}
+
 func (d *DriveStorage) UploadChunk(name string, data []byte) error {
 	if d.service == nil {
 		return fmt.Errorf("drive service not initialized")
@@ -56,7 +86,7 @@ func (d *DriveStorage) UploadChunk(name string, data []byte) error {
 		log.Error("Failed to upload chunk %s: %v", name, err)
 		return fmt.Errorf("failed to upload chunk: %w", err)
 	}
-	log.Info("Uploaded %s to Google Drive", name)
+	log.Info("Uploaded %s to Google Drive (folderID=%s)", name, d.folderID)
 	return nil
 }
 
