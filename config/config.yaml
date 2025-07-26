@@ -1,5 +1,0 @@
-cloud_providers:
-  - aws
-  - gcp
-chunk_size: 1048576 # 1MB
-input_file: example.txt

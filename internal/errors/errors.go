@@ -1,7 +1,4 @@
-// This file has been moved to internal/errors/errors.go for global error management.
-// Please update your imports to use "github.com/sayuyere/storageX/internal/errors".
-
-package cloud
+package errors
 
 import (
 	"errors"

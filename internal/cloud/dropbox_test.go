@@ -39,3 +39,20 @@ func TestDropboxStorageLifecycle(t *testing.T) {
 		t.Fatalf("DeleteChunk failed: %v", err)
 	}
 }
+
+func TestDropboxStorageUnitSize(t *testing.T) {
+	auth := cloud.AuthConfig{
+		DropboxAccessToken: os.Getenv("DROPBOX_ACCESS_TOKEN"),
+	}
+	if auth.DropboxAccessToken == "" {
+		t.Fatal("DROPBOX_ACCESS_TOKEN environment variable not set")
+	}
+	dropbox := cloud.NewDropboxStorageWithAuth(auth)
+	size, err := dropbox.GetRemainingSize()
+	if err != nil {
+		t.Fatalf("GetRemainingSize failed: %v", err)
+	}
+	if size <= 0 {
+		t.Errorf("Expected positive storage unit size, got %d", size)
+	}
+}

@@ -1,0 +1,7 @@
+{
+    "cloud_providers": [
+        "dropbox"
+    ],
+    "chunk_size": 1048576,
+    "input_file": "example.txt"
+}

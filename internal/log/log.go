@@ -2,15 +2,33 @@ package log
 
 import (
 	"os"
+	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 var (
-	logger *zap.SugaredLogger
+	logger   *zap.SugaredLogger
+	initOnce sync.Once
 )
 
+// ensureLogger initializes the logger if it hasn't been initialized yet.
+func ensureLogger() {
+	initOnce.Do(func() {
+		encoderCfg := zap.NewProductionEncoderConfig()
+		encoderCfg.TimeKey = "time"
+		encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+		core := zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderCfg),
+			zapcore.AddSync(zapcore.Lock(os.Stdout)),
+			zapcore.InfoLevel,
+		)
+		logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1)).Sugar()
+	})
+}
+
+// InitLogger allows explicit initialization with a debug flag.
 func InitLogger(debug bool) {
 	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "time"
@@ -31,13 +49,16 @@ func ifLevel(debug bool) zapcore.Level {
 }
 
 func Info(msg string, v ...interface{}) {
+	ensureLogger()
 	logger.Infof(msg, v...)
 }
 
 func Error(msg string, v ...interface{}) {
+	ensureLogger()
 	logger.Errorf(msg, v...)
 }
 
 func Fatal(msg string, v ...interface{}) {
+	ensureLogger()
 	logger.Fatalf(msg, v...)
 }
