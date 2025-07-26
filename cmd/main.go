@@ -7,9 +7,11 @@ import (
 
 	"github.com/yourusername/storageX/internal/chunker"
 	"github.com/yourusername/storageX/internal/cloud"
+	"github.com/yourusername/storageX/internal/log"
 )
 
 func main() {
+	log.InitLogger(true) // log only to stdout, debug enabled
 	configPath := flag.String("config", "config/config.yaml", "Path to config file")
 	flag.Parse()
 
