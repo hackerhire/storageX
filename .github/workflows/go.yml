@@ -28,16 +28,23 @@ jobs:
       - name: Build
         run: make build
 
-      - name: Run tests
+      - name: Run tests and always upload coverage
+        id: test
         run: |
-          go test ./... -v -coverprofile=coverage.out
+          set -e
+          go test ./... -v -coverprofile=coverage.out || echo "::set-output name=failed::true"
 
       - name: Upload coverage to Codecov
+        if: always()
         uses: codecov/codecov-action@v4
         with:
           files: coverage.out
           fail_ci_if_error: true
           verbose: true
+
+      - name: Fail build if tests failed
+        if: steps.test.outputs.failed == 'true'
+        run: exit 1
 
   codeql:
     name: Analyze (CodeQL)
