@@ -56,3 +56,24 @@ func TestDropboxStorageUnitSize(t *testing.T) {
 		t.Errorf("Expected positive storage unit size, got %d", size)
 	}
 }
+
+func TestDropboxStorageSystemID(t *testing.T) {
+	token := os.Getenv("DROPBOX_ACCESS_TOKEN")
+	if token == "" {
+		t.Skip("DROPBOX_ACCESS_TOKEN not set")
+	}
+	auth := cloud.AuthConfig{
+		DropboxAccessToken: token,
+	}
+	dropbox := cloud.NewDropboxStorageWithAuth(auth)
+	id := dropbox.StorageSystemID()
+	if id == "dropbox:unknown" || id == "" {
+		t.Errorf("Expected unique Dropbox storage system ID, got %q", id)
+	}
+	if len(id) < 10 {
+		t.Errorf("StorageSystemID too short: %q", id)
+	}
+	if id[:8] != "dropbox:" {
+		t.Errorf("StorageSystemID should start with 'dropbox:', got %q", id)
+	}
+}

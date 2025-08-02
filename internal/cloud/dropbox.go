@@ -9,6 +9,7 @@ import (
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/users"
 
 	errorsx "github.com/sayuyere/storageX/internal/errors"
+	"github.com/sayuyere/storageX/internal/log"
 )
 
 type DropboxStorage struct {
@@ -79,6 +80,7 @@ func (d *DropboxStorage) StorageSystemID() string {
 	// Use Dropbox account_id as unique tenant/storage node id
 	userClient := users.New(d.config)
 	acc, err := userClient.GetCurrentAccount()
+	log.Info("Dropbox account ID:", acc.AccountId)
 	if err == nil && acc.AccountId != "" {
 		return "dropbox:" + acc.AccountId
 	}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 
@@ -72,7 +73,8 @@ func LoadConfig(path string) (*AppConfig, error) {
 // GetConfig returns the loaded config (must call LoadConfig first).
 func GetConfig() *AppConfig {
 	if config == nil {
-		panic("App config not loaded. Call LoadConfig first.")
+		LoadConfig(defaults.DefaultConfigPath)
+		fmt.Println("App config not loaded. Using default config.")
 	}
 	return config
 }

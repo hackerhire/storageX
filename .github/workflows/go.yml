@@ -28,8 +28,13 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Set Dropbox Access Token
+        run: echo "DROPBOX_ACCESS_TOKEN=${{ secrets.DROPBOX_ACCESS_TOKEN }}" >> $GITHUB_ENV
+
       - name: Run tests and generate coverage
         id: test
+        env:
+          DROPBOX_ACCESS_TOKEN: ${{ secrets.DROPBOX_ACCESS_TOKEN }}
         run: |
           go test ./... -v -coverprofile=coverage.out
 
