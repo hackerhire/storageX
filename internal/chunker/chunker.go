@@ -69,6 +69,7 @@ func NewFileChunker(chunkSize int) *FileChunker {
 // GetChunker returns the singleton FileChunker with the given chunk size (set only on first call)
 func GetChunker(chunkSize int) *FileChunker {
 	singletonOnce.Do(func() {
+
 		singleton = &FileChunker{ChunkSize: chunkSize}
 	})
 	return singleton

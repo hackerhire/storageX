@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/sayuyere/storageX/internal/config"
 )
 
 type ChunkMetadata struct {
@@ -26,7 +27,19 @@ type MetadataService struct {
 }
 
 func NewMetadataService(dbPath string) (*MetadataService, error) {
+
 	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := initSchema(db); err != nil {
+		return nil, err
+	}
+	return &MetadataService{db: db}, nil
+}
+
+func NewMetadataServiceFromConfig() (*MetadataService, error) {
+	db, err := sql.Open("sqlite3", config.GetConfig().Meta.DBPath)
 	if err != nil {
 		return nil, err
 	}

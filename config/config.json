@@ -1,7 +1,12 @@
 {
-    "cloud_providers": [
-        "dropbox"
-    ],
     "chunk_size": 1048576,
-    "input_file": "example.txt"
+    "cloud": {
+        "dropbox_access_tokens": [
+            "token_1",
+            "token_2"
+        ]
+    },
+    "log": {
+        "debug": false
+    }
 }
