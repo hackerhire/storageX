@@ -76,11 +76,6 @@ func (m *MetadataService) AddChunk(fileName string, meta ChunkMetadata) error {
 		return fmt.Errorf("chunk %s already exists", meta.ChunkName)
 	}
 	// Check if file already exists
-	row = m.db.QueryRow(`SELECT 1 FROM files WHERE file_name = ?`, fileName)
-	err = row.Scan(&exists)
-	if err == nil && exists == 1 {
-		return fmt.Errorf("file %s already exists", fileName)
-	}
 	_, err = m.db.Exec(`INSERT OR REPLACE INTO chunks (chunk_name, file_name, size, checksum, idx, storage) VALUES (?, ?, ?, ?, ?, ?)`,
 		meta.ChunkName, fileName, meta.Size, meta.Checksum, meta.Index, meta.Storage)
 	if err != nil {
