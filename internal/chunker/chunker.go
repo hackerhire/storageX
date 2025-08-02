@@ -19,6 +19,8 @@ import (
 // Checksum: fixed-length SHA256 (32 bytes, hex-encoded)
 // Index: chunk index in file
 
+const ChunkMetadataSize = 32 + 8 + 8 // checksum + N + Index
+
 type Chunk struct {
 	Data     []byte   // variable length
 	N        uint64   // 8 bytes
@@ -122,4 +124,30 @@ func (fc *FileChunker) ChunkFileStream(file *os.File) (<-chan Chunk, error) {
 		}
 	}()
 	return ch, nil
+}
+
+// ChunkBytes splits a byte slice into chunks and returns a slice of Chunk
+// This is useful for testing or when you have data in memory
+func (fc *FileChunker) ChunkBytes(data []byte, fileName string) []Chunk {
+	metaSize := 32 + 8 + 8 // checksum + N + Index
+	dataSize := fc.ChunkSize - metaSize
+	var chunks []Chunk
+	for i, offset := 0, 0; offset < len(data); i, offset = i+1, offset+dataSize {
+		end := offset + dataSize
+		if end > len(data) {
+			end = len(data)
+		}
+		chunkData := data[offset:end]
+		hash := sha256.Sum256(chunkData)
+		name := fmt.Sprintf("%s-chunk-%d", fileName, i)
+		chunks = append(chunks, Chunk{
+			Data:     chunkData,
+			N:        uint64(len(chunkData)),
+			Err:      nil,
+			Name:     name,
+			Checksum: hash,
+			Index:    uint64(i),
+		})
+	}
+	return chunks
 }

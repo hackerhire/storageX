@@ -77,6 +77,7 @@ func (s *StorageService) UploadFile(filePath string) error {
 
 	var uploadedChunks []string
 	for chunk := range chunks {
+		log.Info("Processing chunk: %s", chunk.Name, len(chunk.Bytes()))
 		if chunk.Err != nil {
 			rollback(uploadedChunks)
 			return chunk.Err
@@ -115,11 +116,12 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 		return err
 	}
 	for _, meta := range metas {
+		log.Info("Retrieving chunk: %s", meta.ChunkName, meta.Size)
 		data, err := s.manager.GetChunk(meta.Storage, meta.ChunkName)
 		if err != nil {
 			return err
 		}
-		_, err = w.Write(data)
+		_, err = w.Write(data[chunker.ChunkMetadataSize:])
 		if err != nil {
 			return err
 		}
