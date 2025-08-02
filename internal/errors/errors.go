@@ -10,9 +10,10 @@ var (
 	ErrDropboxDownload = errors.New("dropbox: download failed")
 	ErrDropboxDelete   = errors.New("dropbox: delete failed")
 
-	ErrDriveUpload   = errors.New("gdrive: upload failed")
-	ErrDriveDownload = errors.New("gdrive: download failed")
-	ErrDriveDelete   = errors.New("gdrive: delete failed")
+	ErrDriveUpload     = errors.New("gdrive: upload failed")
+	ErrDriveDownload   = errors.New("gdrive: download failed")
+	ErrDriveDelete     = errors.New("gdrive: delete failed")
+	ErrStorageNotFound = errors.New("storage: storage system not found")
 
 	// Add more unified errors for other providers as needed
 )

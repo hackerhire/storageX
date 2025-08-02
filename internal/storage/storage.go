@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -24,38 +25,83 @@ func NewStorageService(mgr *manager.StorageManager, meta *metadata.MetadataServi
 	}
 }
 
-// UploadFile splits the file into chunks and uploads them
+// UploadFile splits the file into chunks and uploads them, updating metadata
 func (s *StorageService) UploadFile(filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	chunks, err := s.chunker.ChunkFileStream(file)
+
+	info, err := file.Stat()
+	if err != nil {
+		log.Error("failed to get file info: %v", err)
+		return err
+	}
+	fileName := file.Name()
+
+	// Check if file already exists in metadata
+	exists, err := s.metaSvc.FileExists(fileName)
 	if err != nil {
 		return err
 	}
+	if exists {
+		return fmt.Errorf("file %s already exists in metadata", fileName)
+	}
+
+	// Add file entry to metadata first to prevent race conditions
+	if err := s.metaSvc.AddFile(fileName, uint64(info.Size())); err != nil {
+		return err
+	}
+
+	// Rollback function to clean up metadata and cloud storage
+	rollback := func(uploadedChunks []string) {
+		for _, chunkName := range uploadedChunks {
+			// Assuming the storage system ID can be obtained from the manager
+			chunkMetaData, found := s.metaSvc.GetChunk(chunkName)
+			if !found {
+				log.Error("chunk %s not found in metadata, skipping deletion", chunkName)
+				continue
+			}
+			_ = s.manager.DeleteChunk(chunkMetaData.Storage, chunkName)
+		}
+		_ = s.metaSvc.DeleteFile(fileName)
+
+	}
+
+	chunks, err := s.chunker.ChunkFileStream(file)
+	if err != nil {
+		_ = s.metaSvc.DeleteFile(fileName)
+		return err
+	}
+
+	var uploadedChunks []string
 	for chunk := range chunks {
 		if chunk.Err != nil {
-			err := s.metaSvc.DeleteFile(file.Name())
-			if err != nil {
-				log.Info("Error While deleting item from metadata service :: ", err)
-			}
+			rollback(uploadedChunks)
 			return chunk.Err
 		}
 		c := string(chunk.Checksum[:])
-		systemToUse := s.manager.GetCloudSvcForStorage().StorageSystemID() // Relly bad as we are reserving have some reservation logic with sometimeout if not used but keeping this simple for now
-		s.metaSvc.AddChunk(file.Name(), metadata.ChunkMetadata{
+		if exists, _ := s.metaSvc.ChunkExists(chunk.Name); exists {
+			rollback(uploadedChunks)
+			return fmt.Errorf("chunk %s already exists in metadata", chunk.Name)
+		}
+		storageLocation, err := s.manager.UploadChunk(chunk.Name, chunk)
+		if err != nil {
+			rollback(uploadedChunks)
+			return err
+		}
+		uploadedChunks = append(uploadedChunks, chunk.Name)
+		err = s.metaSvc.AddChunk(fileName, metadata.ChunkMetadata{
 			ChunkName: chunk.Name,
 			Size:      int64(len(chunk.Data)),
 			Checksum:  c,
 			Index:     int(chunk.Index),
-			FileName:  file.Name(),
-			Storage:   systemToUse,
+			FileName:  fileName,
+			Storage:   storageLocation.StorageSystemID(),
 		})
-		err := s.manager.UploadChunk(file.Name(), chunk.Name, chunk, c)
 		if err != nil {
-			err := s.metaSvc.DeleteFile(file.Name())
+			rollback(uploadedChunks)
 			return err
 		}
 	}
@@ -69,7 +115,7 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 		return err
 	}
 	for _, meta := range metas {
-		data, _, err := s.manager.GetChunkFrom(meta.Storage, meta.ChunkName)
+		data, err := s.manager.GetChunk(meta.Storage, meta.ChunkName)
 		if err != nil {
 			return err
 		}
@@ -81,19 +127,27 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 	return nil
 }
 
-// DeleteFile deletes all chunks for a file
+// DeleteFile deletes all chunks for a file and removes metadata.
+// If any chunk deletion fails, it continues deleting the rest and collects errors.
 func (s *StorageService) DeleteFile(fileName string) error {
 	metas, err := s.metaSvc.ListChunks(fileName)
 	if err != nil {
 		return err
 	}
+
+	var deleteErrs []error
 	for _, meta := range metas {
-		err := s.manager.DeleteChunk(meta.ChunkName)
-		if err != nil {
-			return err
+		if err := s.manager.DeleteChunk(meta.Storage, meta.ChunkName); err != nil {
+			deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete chunk %s: %w", meta.ChunkName, err))
 		}
 	}
-	// Optionally, delete the file metadata
-	err = s.metaSvc.DeleteFile(fileName)
-	return err
+
+	if err := s.metaSvc.DeleteFile(fileName); err != nil {
+		deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete file metadata: %w", err))
+	}
+
+	if len(deleteErrs) > 0 {
+		return fmt.Errorf("DeleteFile encountered errors: %v", deleteErrs)
+	}
+	return nil
 }

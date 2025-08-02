@@ -94,6 +94,12 @@ func (m *MetadataService) AddChunk(fileName string, meta ChunkMetadata) error {
 	return err
 }
 
+// AddFile inserts a file entry into the files table (for transaction/rollback use)
+func (m *MetadataService) AddFile(fileName string, fileSize uint64) error {
+	_, err := m.db.Exec(`INSERT OR IGNORE INTO files (file_name, total_size) VALUES (?, ?)`, fileName, fileSize)
+	return err
+}
+
 func (m *MetadataService) GetChunk(chunkName string) (ChunkMetadata, bool) {
 	row := m.db.QueryRow(`SELECT chunk_name, file_name, size, checksum, idx, storage FROM chunks WHERE chunk_name = ?`, chunkName)
 	var meta ChunkMetadata
@@ -156,4 +162,38 @@ func (m *MetadataService) DeleteFile(fileName string) error {
 	// Delete the file entry itself
 	_, err = m.db.Exec(`DELETE FROM files WHERE file_name = ?`, fileName)
 	return err
+}
+
+// DeleteChunk removes a chunk entry from the database
+func (m *MetadataService) DeleteChunk(chunkName string) error {
+	_, err := m.db.Exec(`DELETE FROM chunks WHERE chunk_name = ?`, chunkName)
+	return err
+}
+
+// ChunkExists checks if a chunk exists in the database
+func (m *MetadataService) ChunkExists(chunkName string) (bool, error) {
+	row := m.db.QueryRow(`SELECT 1 FROM chunks WHERE chunk_name = ?`, chunkName)
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return exists == 1, nil
+}
+
+// FileExists checks if a file exists in the database
+func (m *MetadataService) FileExists(fileName string) (bool, error) {
+	row := m.db.QueryRow(`SELECT 1 FROM files WHERE file_name = ?`, fileName)
+	var exists int
+	err := row.Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return exists == 1, nil
 }
