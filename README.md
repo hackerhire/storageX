@@ -1,49 +1,91 @@
 # storageX
 
-A modular Go system to chunk and store files in multiple cloud services (Dropbox, Google Drive, etc.) with unified authentication, error handling, and extensible storage backends.
+A modular Go system for chunking and storing files across multiple cloud services (Dropbox, Google Drive, etc.), with unified authentication, robust error handling, persistent metadata (SQLite), and extensible storage backends.
+
+---
 
 ## Features
-- Streaming chunking logic for large files
-- Pluggable, unified cloud storage backends (Dropbox, Google Drive, etc.)
-- Unified authentication and error handling
-- Persistent metadata tracking (SQLite)
-- Storage manager for multi-cloud orchestration
-- Robust logging (zap)
-- CI/CD with test coverage and security scanning
-- Easy to add new cloud providers
+- **Modular architecture**: Clean separation between chunking, storage orchestration, cloud management, and metadata.
+- **Unified CLI**: Upload/download files with a single command-line tool.
+- **Config-driven**: All settings via JSON config file (see `config/config.json`).
+- **Transactional safety**: Rollback on failed uploads, atomic metadata updates.
+- **Persistent metadata**: SQLite-backed file/chunk tracking.
+- **Extensible**: Add new cloud providers easily.
+- **Robust logging**: Configurable debug/info/error output.
+- **CI/CD**: GitHub Actions for test, coverage, and security.
 
-## Structure
-- `cmd/` - Main application entrypoint
-- `internal/chunker/` - Streaming chunking logic (singleton, config-driven)
-- `internal/cloud/` - Cloud storage abstractions and implementations (Dropbox, Google Drive, etc.)
-- `internal/manager/` - Storage manager for orchestrating multi-cloud operations
-- `internal/metadata/` - Persistent chunk and file metadata (SQLite)
-- `internal/storage/` - High-level file storage/retrieval API
-- `internal/log/` - Logging utilities (zap)
-- `internal/config/` - App config management (JSON)
-- `config/` - Configuration files (JSON)
+---
 
-## Usage
+## Quick Start
+
+### 1. Install dependencies
+- Go 1.20+
+- [Graphviz](https://graphviz.gitlab.io/) (for diagrams)
+- Python 3 + `pip install diagrams` (for system diagram)
+
+### 2. Build the CLI
 ```sh
+git clone <your-repo-url>
+cd storageX
 make build
-./bin/storageX --config config/config.json
 ```
 
-## Requirements
-- Go 1.21+
-- Dropbox/Google Drive credentials (for respective providers)
-- SQLite (for metadata)
+### 3. Configure
+Edit `config/config.json` to set up cloud credentials, chunk size, logging, etc.
+
+### 4. Usage
+#### Upload a file
+```sh
+./bin/storagex upload /path/to/file.txt
+```
+#### Download a file
+```sh
+./bin/storagex download file.txt /path/to/output.txt
+```
+#### Show version
+```sh
+./bin/storagex version
+```
+
+---
+
+## System Architecture
+- See `docs/diagram.py` (Python) or `docs/diagram.go` (Go) for system diagrams.
+- Run `python docs/diagram.py` to generate a PNG architecture diagram.
+
+---
+
+## Project Structure
+```
+cmd/           # CLI entrypoint (main.go)
+internal/
+  chunker/     # File chunking logic
+  cloud/       # Cloud provider interfaces & implementations
+  manager/     # StorageManager: cloud ops
+  metadata/    # MetadataService: SQLite
+  storage/     # StorageService: orchestration
+  log/         # Logging
+  config/      # Config loading
+  defaults/    # Default values
+config/        # config.json
+.github/       # CI/CD workflows
+README.md      # This file
+```
+
+---
 
 ## Extending
-To add a new cloud provider, implement the `CloudStorage` interface in `internal/cloud/` and register it in your config/manager.
+- Add a new provider: implement `CloudStorage` interface in `internal/cloud/` and register in config.
+- Add new CLI commands: edit `cmd/main.go` and wire up to storage service.
+
+---
 
 ## Testing
 ```sh
-go test ./...
+make test
 ```
 
-## CI/CD
-- GitHub Actions: build, test, coverage, security (CodeQL)
-
 ---
-For more details, see the code and comments in each module.
+
+## License
+MIT
