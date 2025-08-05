@@ -38,7 +38,11 @@ func (s *StorageService) UploadFile(filePath string) error {
 		log.Error("failed to get file info: %v", err)
 		return err
 	}
-	fileName := file.Name()
+	// Use only the base name for fileName, not the full path
+	fileName := info.Name()
+	if fileName == "" || fileName == "." {
+		fileName = filePath // fallback
+	}
 
 	// Check if file already exists in metadata
 	exists, err := s.metaSvc.FileExists(fileName)
