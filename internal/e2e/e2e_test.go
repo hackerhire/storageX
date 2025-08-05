@@ -65,7 +65,11 @@ func TestEndToEnd_UploadDownloadDelete(t *testing.T) {
 	// Download
 	var buf bytes.Buffer
 	t.Log("[e2e] Downloading file...")
-	if err := svc.GetFile(f.Name(), &buf); err != nil {
+	fileInfo, err := f.Stat()
+	if err != nil {
+		t.Fatalf("failed to get file info: %v", err)
+	}
+	if err := svc.GetFile(fileInfo.Name(), &buf); err != nil {
 		t.Fatalf("GetFile failed: %v", err)
 	}
 	t.Logf("[e2e] Downloaded %d bytes.", buf.Len())
