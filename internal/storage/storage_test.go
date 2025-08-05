@@ -84,7 +84,11 @@ func TestUploadAndGetFile(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := ss.GetFile(f.Name(), &buf); err != nil {
+	info, err := f.Stat()
+	if err != nil {
+		t.Fatalf("failed to get file info: %v", err)
+	}
+	if err := ss.GetFile(info.Name(), &buf); err != nil {
 		t.Fatalf("GetFile failed: %v", err)
 	}
 
@@ -130,6 +134,7 @@ func TestUploadFile_RollbackOnChunkError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
+
 	defer os.Remove(f.Name())
 	if _, err := f.Write([]byte("testdata")); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
