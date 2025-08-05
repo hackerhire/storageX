@@ -14,3 +14,4 @@ log.Info("message: %v", val)
 
 ## Extension
 - Add file logging, structured logging, or cloud log sinks
+
