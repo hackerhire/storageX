@@ -89,7 +89,11 @@ func GetChunkerFromConfig() *FileChunker {
 // ChunkFileStream streams file chunks of the given size (in bytes) via a channel, with metadata
 func (fc *FileChunker) ChunkFileStream(file *os.File) (<-chan Chunk, error) {
 	ch := make(chan Chunk)
-	fileName := file.Name() // get the file name for chunk naming
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+	fileName := fileInfo.Name() // get the file name for chunk naming
 	go func() {
 		defer file.Close()
 		defer close(ch)
