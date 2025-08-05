@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    environment: Test Env
+    environment: master
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
