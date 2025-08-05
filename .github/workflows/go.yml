@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build:
+    environment: Test Env
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
