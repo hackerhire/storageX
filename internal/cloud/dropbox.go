@@ -55,7 +55,8 @@ func (d *DropboxStorage) DeleteChunk(name string) error {
 	return nil
 }
 
-func (d *DropboxStorage) GetRemainingSize() (uint64, error) {
+// Fix GetRemainingSize to match interface: return int64, not uint64
+func (d *DropboxStorage) GetRemainingSize() (int64, error) {
 	userClient := users.New(d.config)
 	spaceUsage, err := userClient.GetSpaceUsage()
 	if err != nil {
@@ -66,14 +67,10 @@ func (d *DropboxStorage) GetRemainingSize() (uint64, error) {
 		allocated = spaceUsage.Allocation.Individual.Allocated
 	} else if spaceUsage.Allocation.Tag == "team" && spaceUsage.Allocation.Team != nil {
 		allocated = spaceUsage.Allocation.Team.Allocated
-	} else {
-		return 0, errorsx.WrapDropboxError(errorsx.ErrDropboxDownload, err)
 	}
 	used = spaceUsage.Used
-	if allocated < used {
-		return 0, nil // Guard against underflow
-	}
-	return allocated - used, nil
+	remaining := int64(allocated - used)
+	return remaining, nil
 }
 
 func (d *DropboxStorage) StorageSystemID() string {
