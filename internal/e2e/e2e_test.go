@@ -78,10 +78,13 @@ func TestEndToEnd_UploadDownloadDelete(t *testing.T) {
 	} else {
 		t.Log("[e2e] Downloaded data matches original.")
 	}
-
+	stat, err := f.Stat()
+	if err != nil {
+		t.Fatalf("failed to get file state: %v", err)
+	}
 	// Delete
 	t.Log("[e2e] Deleting file and metadata...")
-	if err := svc.DeleteFile(f.Name()); err != nil {
+	if err := svc.DeleteFile(stat.Name()); err != nil {
 		t.Fatalf("DeleteFile failed: %v", err)
 	}
 	if ok, _ := meta.FileExists(f.Name()); ok {
