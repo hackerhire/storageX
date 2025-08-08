@@ -49,6 +49,7 @@ func (d *DropboxStorage) GetChunk(name string) ([]byte, error) {
 func (d *DropboxStorage) DeleteChunk(name string) error {
 	deleteArg := files.NewDeleteArg("/" + name)
 	_, err := d.client.DeleteV2(deleteArg)
+	log.Info("Dropbox delete chunk:", name, "error:", err)
 	if err != nil {
 		return errorsx.WrapDropboxError(errorsx.ErrDropboxDelete, err)
 	}
