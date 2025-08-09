@@ -97,7 +97,6 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println("Download logic not yet implemented.")
 		},
 	})
 
