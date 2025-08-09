@@ -3,6 +3,7 @@ package metadata
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sayuyere/storageX/internal/config"
@@ -23,7 +24,8 @@ type FileMetadata struct {
 }
 
 type MetadataService struct {
-	db *sql.DB
+	db   *sql.DB
+	lock sync.RWMutex
 }
 
 func NewMetadataService(dbPath string) (*MetadataService, error) {
@@ -68,6 +70,9 @@ func initSchema(db *sql.DB) error {
 }
 
 func (m *MetadataService) AddChunk(fileName string, meta ChunkMetadata) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	// Check if chunk already exists
 	row := m.db.QueryRow(`SELECT 1 FROM chunks WHERE chunk_name = ?`, meta.ChunkName)
 	var exists int
@@ -91,11 +96,17 @@ func (m *MetadataService) AddChunk(fileName string, meta ChunkMetadata) error {
 
 // AddFile inserts a file entry into the files table (for transaction/rollback use)
 func (m *MetadataService) AddFile(fileName string, fileSize uint64) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, err := m.db.Exec(`INSERT OR IGNORE INTO files (file_name, total_size) VALUES (?, ?)`, fileName, fileSize)
 	return err
 }
 
 func (m *MetadataService) GetChunk(chunkName string) (ChunkMetadata, bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	row := m.db.QueryRow(`SELECT chunk_name, file_name, size, checksum, idx, storage FROM chunks WHERE chunk_name = ?`, chunkName)
 	var meta ChunkMetadata
 	if err := row.Scan(&meta.ChunkName, &meta.FileName, &meta.Size, &meta.Checksum, &meta.Index, &meta.Storage); err != nil {
@@ -105,6 +116,9 @@ func (m *MetadataService) GetChunk(chunkName string) (ChunkMetadata, bool) {
 }
 
 func (m *MetadataService) GetFile(fileName string) (FileMetadata, bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	row := m.db.QueryRow(`SELECT file_name, total_size FROM files WHERE file_name = ?`, fileName)
 	var meta FileMetadata
 	if err := row.Scan(&meta.FileName, &meta.TotalSize); err != nil {
@@ -114,6 +128,9 @@ func (m *MetadataService) GetFile(fileName string) (FileMetadata, bool) {
 }
 
 func (m *MetadataService) ListChunks(fileName string) ([]ChunkMetadata, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	rows, err := m.db.Query(`SELECT chunk_name, file_name, size, checksum, idx, storage FROM chunks WHERE file_name = ? ORDER BY idx`, fileName)
 	if err != nil {
 		return nil, err
@@ -131,6 +148,9 @@ func (m *MetadataService) ListChunks(fileName string) ([]ChunkMetadata, error) {
 }
 
 func (m *MetadataService) ListFiles() ([]FileMetadata, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	rows, err := m.db.Query(`SELECT file_name, total_size FROM files`)
 	if err != nil {
 		return nil, err
@@ -149,6 +169,9 @@ func (m *MetadataService) ListFiles() ([]FileMetadata, error) {
 
 // DeleteFile deletes a file and all its linked chunks from the database
 func (m *MetadataService) DeleteFile(fileName string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	// Delete all chunks for this file
 	_, err := m.db.Exec(`DELETE FROM chunks WHERE file_name = ?`, fileName)
 	if err != nil {
@@ -161,12 +184,18 @@ func (m *MetadataService) DeleteFile(fileName string) error {
 
 // DeleteChunk removes a chunk entry from the database
 func (m *MetadataService) DeleteChunk(chunkName string) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, err := m.db.Exec(`DELETE FROM chunks WHERE chunk_name = ?`, chunkName)
 	return err
 }
 
 // ChunkExists checks if a chunk exists in the database
 func (m *MetadataService) ChunkExists(chunkName string) (bool, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	row := m.db.QueryRow(`SELECT 1 FROM chunks WHERE chunk_name = ?`, chunkName)
 	var exists int
 	err := row.Scan(&exists)
@@ -181,6 +210,9 @@ func (m *MetadataService) ChunkExists(chunkName string) (bool, error) {
 
 // FileExists checks if a file exists in the database
 func (m *MetadataService) FileExists(fileName string) (bool, error) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
 	row := m.db.QueryRow(`SELECT 1 FROM files WHERE file_name = ?`, fileName)
 	var exists int
 	err := row.Scan(&exists)

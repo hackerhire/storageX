@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/sayuyere/storageX/internal/chunker"
+	"github.com/sayuyere/storageX/internal/config"
 	"github.com/sayuyere/storageX/internal/log"
 	"github.com/sayuyere/storageX/internal/manager"
 	"github.com/sayuyere/storageX/internal/metadata"
@@ -15,6 +17,7 @@ type StorageService struct {
 	manager *manager.StorageManager
 	metaSvc *metadata.MetadataService
 	chunker *chunker.FileChunker
+	lock    sync.RWMutex
 }
 
 func NewStorageService(mgr *manager.StorageManager, meta *metadata.MetadataService, ch *chunker.FileChunker) *StorageService {
@@ -27,6 +30,9 @@ func NewStorageService(mgr *manager.StorageManager, meta *metadata.MetadataServi
 
 // UploadFile splits the file into chunks and uploads them, updating metadata
 func (s *StorageService) UploadFile(filePath string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -79,53 +85,101 @@ func (s *StorageService) UploadFile(filePath string) error {
 		return err
 	}
 
-	var uploadedChunks []string
+	var (
+		uploadedChunks []string
+		errOnce        sync.Once
+		uploadErr      error
+		mu             sync.Mutex
+		wg             sync.WaitGroup
+		maxParallel    = config.GetConfig().Parallel.Upload // adjust as needed
+		sem            = make(chan struct{}, maxParallel)
+	)
+
 	for chunk := range chunks {
-		log.Info("Processing chunk: %s", chunk.Name, len(chunk.Bytes()))
 		if chunk.Err != nil {
-			rollback(uploadedChunks)
-			return chunk.Err
+			errOnce.Do(func() { uploadErr = chunk.Err })
+			break
 		}
 		c := string(chunk.Checksum[:])
 		if exists, _ := s.metaSvc.ChunkExists(chunk.Name); exists {
-			rollback(uploadedChunks)
-			return fmt.Errorf("chunk %s already exists in metadata", chunk.Name)
+			errOnce.Do(func() { uploadErr = fmt.Errorf("chunk %s already exists in metadata", chunk.Name) })
+			break
 		}
-		storageLocation, err := s.manager.UploadChunk(chunk.Name, chunk)
-		if err != nil {
-			rollback(uploadedChunks)
-			return err
-		}
-		uploadedChunks = append(uploadedChunks, chunk.Name)
-		err = s.metaSvc.AddChunk(fileName, metadata.ChunkMetadata{
-			ChunkName: chunk.Name,
-			Size:      int64(len(chunk.Data)),
-			Checksum:  c,
-			Index:     int(chunk.Index),
-			FileName:  fileName,
-			Storage:   storageLocation.StorageSystemID(),
-		})
-		if err != nil {
-			rollback(uploadedChunks)
-			return err
-		}
+		sem <- struct{}{} // acquire slot
+		wg.Add(1)
+		go func(chunk chunker.Chunk) {
+			defer wg.Done()
+			defer func() { <-sem }() // release slot
+			storageLocation, err := s.manager.UploadChunk(chunk.Name, chunk)
+			if err != nil {
+				errOnce.Do(func() { uploadErr = err })
+				return
+			}
+			mu.Lock()
+			uploadedChunks = append(uploadedChunks, chunk.Name)
+			mu.Unlock()
+			err = s.metaSvc.AddChunk(fileName, metadata.ChunkMetadata{
+				ChunkName: chunk.Name,
+				Size:      int64(len(chunk.Data)),
+				Checksum:  c,
+				Index:     int(chunk.Index),
+				FileName:  fileName,
+				Storage:   storageLocation.StorageSystemID(),
+			})
+			if err != nil {
+				errOnce.Do(func() { uploadErr = err })
+			}
+		}(chunk)
+	}
+	wg.Wait()
+	if uploadErr != nil {
+		rollback(uploadedChunks)
+		return uploadErr
 	}
 	return nil
 }
 
 // GetFile reconstructs the file from chunks and writes to writer
 func (s *StorageService) GetFile(fileName string, w io.Writer) error {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
 	metas, err := s.metaSvc.ListChunks(fileName)
 	if err != nil {
 		return err
 	}
-	for _, meta := range metas {
-		log.Info("Retrieving chunk: %s", meta.ChunkName, meta.Size)
-		data, err := s.manager.GetChunk(meta.Storage, meta.ChunkName)
-		if err != nil {
-			return err
+	var (
+		errOnce     sync.Once
+		getErr      error
+		wg          sync.WaitGroup
+		maxParallel = config.GetConfig().Parallel.Download
+		sem         = make(chan struct{}, maxParallel)
+		results     = make([][]byte, len(metas))
+	)
+	for i, meta := range metas {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int, meta metadata.ChunkMetadata) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			log.Info("Retrieving chunk: %s", meta.ChunkName, meta.Size)
+			data, err := s.manager.GetChunk(meta.Storage, meta.ChunkName)
+			if err != nil {
+				errOnce.Do(func() { getErr = err })
+				return
+			}
+			results[i] = data[chunker.ChunkMetadataSize:]
+		}(i, meta)
+	}
+	wg.Wait()
+	if getErr != nil {
+		return getErr
+	}
+	for _, chunkData := range results {
+		if chunkData == nil {
+			continue // skip missing chunks
 		}
-		_, err = w.Write(data[chunker.ChunkMetadataSize:])
+		_, err := w.Write(chunkData)
 		if err != nil {
 			return err
 		}
@@ -136,6 +190,9 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 // DeleteFile deletes all chunks for a file and removes metadata.
 // If any chunk deletion fails, it continues deleting the rest and collects errors.
 func (s *StorageService) DeleteFile(fileName string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	metas, err := s.metaSvc.ListChunks(fileName)
 	if err != nil {
 		return err

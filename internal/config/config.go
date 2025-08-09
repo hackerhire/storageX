@@ -24,11 +24,17 @@ type MetaDataServiceConfig struct {
 	DBPath string `json:"db_path"`
 }
 
+type ParallelConfig struct {
+	Upload   int `json:"upload_workers"`
+	Download int `json:"download_workers"`
+}
+
 type AppConfig struct {
 	ChunkSize int                   `json:"chunk_size"`
 	Cloud     CloudConfig           `json:"cloud"`
 	Log       LogConfig             `json:"log"`
 	Meta      MetaDataServiceConfig `json:"metadata"`
+	Parallel  ParallelConfig        `json:"parallel"`
 }
 
 var (
@@ -73,6 +79,12 @@ func UpdatePaths(cfg *AppConfig) {
 			cfg.Meta.DBPath = absPath
 		}
 	}
+	if cfg.Parallel.Upload <= 0 {
+		cfg.Parallel.Upload = defaults.DefaultStorageUploadWorkers // default upload workers
+	}
+	if cfg.Parallel.Download <= 0 {
+		cfg.Parallel.Download = defaults.DefaultStorageDownloadWorkers // default download workers
+	}
 }
 
 // LoadConfig loads configuration from the given JSON file path.
@@ -90,6 +102,10 @@ func LoadConfig(path string) (*AppConfig, error) {
 			},
 			Meta: MetaDataServiceConfig{
 				DBPath: defaults.DefaultDBPath,
+			},
+			Parallel: ParallelConfig{
+				Upload:   4,
+				Download: 4,
 			},
 		}
 		f, e := os.Open(path)
