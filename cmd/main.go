@@ -32,7 +32,8 @@ func main() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./config/config.json)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (required)")
+	rootCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(
 		&cobra.Command{
@@ -64,6 +65,18 @@ func main() {
 			output := args[1]
 			fmt.Println("Downloading:", fileName, "to", output)
 			// TODO: wire up storage service and call GetFile
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "configfile",
+		Short: "Print the path to the config file in use",
+		Run: func(cmd *cobra.Command, args []string) {
+			if cfgFile != "" {
+				fmt.Println(cfgFile)
+			} else {
+				fmt.Println("./config/config.json")
+			}
 		},
 	})
 
