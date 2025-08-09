@@ -2,10 +2,13 @@
     "chunk_size": 1048576,
     "cloud": {
         "dropbox_access_tokens": [
-            "DROPBOX_ACCESS_TOKEN"
+            "DROP_BOX_TOKEN"
         ]
     },
     "log": {
         "debug": false
+    },
+    "metadata": {
+        "db_path": "~/storageX/metadata.db"
     }
 }
