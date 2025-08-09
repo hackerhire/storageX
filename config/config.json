@@ -2,8 +2,7 @@
     "chunk_size": 1048576,
     "cloud": {
         "dropbox_access_tokens": [
-            "token_1",
-            "token_2"
+            "DROPBOX_ACCESS_TOKEN"
         ]
     },
     "log": {
