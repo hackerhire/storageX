@@ -101,6 +101,25 @@ func main() {
 	})
 
 	rootCmd.AddCommand(&cobra.Command{
+		Use:   "delete [file]",
+		Short: "Delete a file and all its chunks from cloud storage and metadata",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			fileName := args[0]
+			fmt.Println("Deleting:", fileName)
+			if services == nil {
+				fmt.Fprintln(os.Stderr, "Services not initialized")
+				os.Exit(1)
+			}
+			if err := services.Storage.DeleteFile(fileName); err != nil {
+				fmt.Fprintf(os.Stderr, "Delete failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Delete successful!")
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
 		Use:   "configfile",
 		Short: "Print the path to the config file in use",
 		Run: func(cmd *cobra.Command, args []string) {

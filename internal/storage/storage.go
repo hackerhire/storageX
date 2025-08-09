@@ -198,12 +198,27 @@ func (s *StorageService) DeleteFile(fileName string) error {
 		return err
 	}
 
-	var deleteErrs []error
+	var (
+		deleteErrs  []error
+		wg          sync.WaitGroup
+		maxParallel = config.GetConfig().Parallel.Upload // or Download, as appropriate
+		sem         = make(chan struct{}, maxParallel)
+		mu          sync.Mutex
+	)
 	for _, meta := range metas {
-		if err := s.manager.DeleteChunk(meta.Storage, meta.ChunkName); err != nil {
-			deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete chunk %s: %w", meta.ChunkName, err))
-		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(meta metadata.ChunkMetadata) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if err := s.manager.DeleteChunk(meta.Storage, meta.ChunkName); err != nil {
+				mu.Lock()
+				deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete chunk %s: %w", meta.ChunkName, err))
+				mu.Unlock()
+			}
+		}(meta)
 	}
+	wg.Wait()
 
 	if err := s.metaSvc.DeleteFile(fileName); err != nil {
 		deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete file metadata: %w", err))
