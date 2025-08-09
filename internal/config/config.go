@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -34,6 +35,25 @@ var (
 	configOnce sync.Once
 )
 
+func ResetConfigSingleton() {
+	// This is not thread-safe, but fine for test use
+	configOnce = sync.Once{}
+	config = nil // Reset the config to nil
+}
+
+func LookupSecrets(cfg *AppConfig) {
+	for i := 0; i < len(cfg.Cloud.DropboxAccessTokens); i++ {
+		if cfg.Cloud.DropboxAccessTokens[i] == "" {
+			log.Default().Printf("Warning: Dropbox access token at index %d is empty", i)
+		} else if os.Getenv(cfg.Cloud.DropboxAccessTokens[i]) == "" {
+			log.Default().Printf("Warning: Environment variable for Dropbox access token at index %d is not set", i)
+		} else {
+			log.Default().Printf("Dropbox access token at index %d is set", i)
+			cfg.Cloud.DropboxAccessTokens[i] = os.Getenv(cfg.Cloud.DropboxAccessTokens[i])
+		}
+	}
+}
+
 // LoadConfig loads configuration from the given JSON file path.
 func LoadConfig(path string) (*AppConfig, error) {
 	var err error
@@ -55,6 +75,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 		if e != nil {
 			err = e
 			config = defaultConfig // Use default config if file not found
+			log.Printf("Failed to open config file %s: %v\n", path, e)
 			return
 		}
 		defer f.Close()
@@ -63,8 +84,10 @@ func LoadConfig(path string) (*AppConfig, error) {
 		if e := decoder.Decode(cfg); e != nil {
 			err = e
 			config = defaultConfig // Use default config if decoding fails
+			log.Printf("Failed to decode config from %s: %v\n", path, e)
 			return
 		}
+		LookupSecrets(cfg)
 		config = cfg
 	})
 	return config, err
