@@ -58,9 +58,17 @@ func UpdatePaths(cfg *AppConfig) {
 	if cfg.Meta.DBPath == "" {
 		cfg.Meta.DBPath = defaults.DefaultDBPath
 	}
+	// Expand ~ to home directory if present
+	if len(cfg.Meta.DBPath) > 0 && cfg.Meta.DBPath[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			cfg.Meta.DBPath = filepath.Join(home, cfg.Meta.DBPath[1:])
+		}
+	}
 	// Convert DBPath to absolute path if it's relative
 	if !filepath.IsAbs(cfg.Meta.DBPath) {
 		absPath, err := filepath.Abs(cfg.Meta.DBPath)
+		log.Default().Printf("DBPath updated to absolute path: %s", absPath)
 		if err == nil {
 			cfg.Meta.DBPath = absPath
 		}

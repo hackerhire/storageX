@@ -9,6 +9,6 @@
         "debug": false
     },
     "metadata": {
-        "db_path": "~/storageX/metadata.db"
+        "db_path": "~/metadata.db"
     }
 }
