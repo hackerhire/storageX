@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/sayuyere/storageX/internal/defaults"
@@ -53,6 +54,18 @@ func LookupSecrets(cfg *AppConfig) {
 		}
 	}
 }
+func UpdatePaths(cfg *AppConfig) {
+	if cfg.Meta.DBPath == "" {
+		cfg.Meta.DBPath = defaults.DefaultDBPath
+	}
+	// Convert DBPath to absolute path if it's relative
+	if !filepath.IsAbs(cfg.Meta.DBPath) {
+		absPath, err := filepath.Abs(cfg.Meta.DBPath)
+		if err == nil {
+			cfg.Meta.DBPath = absPath
+		}
+	}
+}
 
 // LoadConfig loads configuration from the given JSON file path.
 func LoadConfig(path string) (*AppConfig, error) {
@@ -88,6 +101,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 			return
 		}
 		LookupSecrets(cfg)
+		UpdatePaths(cfg)
 		config = cfg
 	})
 	return config, err
