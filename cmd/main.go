@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sayuyere/storageX/internal/app"
 	"github.com/sayuyere/storageX/internal/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -12,6 +13,8 @@ import (
 var cfgFile string
 
 func main() {
+	var services *app.ServiceBundle
+
 	log.InitLogger(true)
 
 	rootCmd := &cobra.Command{
@@ -27,6 +30,13 @@ func main() {
 			viper.SetConfigType("json")
 			if err := viper.ReadInConfig(); err != nil {
 				fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
+				os.Exit(1)
+			}
+			// Initialize all services for CLI use
+			var err error
+			services, err = app.NewServiceBundle(viper.ConfigFileUsed())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Service init error: %v\n", err)
 				os.Exit(1)
 			}
 		},
@@ -52,7 +62,15 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			filePath := args[0]
 			fmt.Println("Uploading:", filePath)
-			// TODO: wire up storage service and call UploadFile
+			if services == nil {
+				fmt.Fprintln(os.Stderr, "Services not initialized")
+				os.Exit(1)
+			}
+			if err := services.Storage.UploadFile(filePath); err != nil {
+				fmt.Fprintf(os.Stderr, "Upload failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Upload successful!")
 		},
 	})
 
@@ -64,7 +82,22 @@ func main() {
 			fileName := args[0]
 			output := args[1]
 			fmt.Println("Downloading:", fileName, "to", output)
-			// TODO: wire up storage service and call GetFile
+			if services == nil {
+				fmt.Fprintln(os.Stderr, "Services not initialized")
+				os.Exit(1)
+			}
+			file, err := os.Create(output)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create output file: %v\n", err)
+				os.Exit(1)
+			}
+			// TODO: implement services.Storage.GetFile(fileName, output)
+			err = services.Storage.GetFile(fileName, file)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Download failed: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("Download logic not yet implemented.")
 		},
 	})
 
