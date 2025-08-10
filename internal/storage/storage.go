@@ -8,6 +8,7 @@ import (
 
 	"github.com/sayuyere/storageX/internal/chunker"
 	"github.com/sayuyere/storageX/internal/config"
+	errorx "github.com/sayuyere/storageX/internal/errors" // new error package alias
 	"github.com/sayuyere/storageX/internal/log"
 	"github.com/sayuyere/storageX/internal/manager"
 	"github.com/sayuyere/storageX/internal/metadata"
@@ -41,42 +42,39 @@ func (s *StorageService) UploadFile(filePath string) error {
 
 	info, err := file.Stat()
 	if err != nil {
-		log.Error("failed to get file info: %v", err)
-		return err
+		log.Error("%v: %v", errorx.ErrFileInfoFetchFailed, err)
+		return errorx.Wrap(errorx.ErrFileInfoFetchFailed, err)
 	}
-	// Use only the base name for fileName, not the full path
 	fileName := info.Name()
 	if fileName == "" || fileName == "." {
-		fileName = filePath // fallback
+		fileName = filePath
 	}
 
-	// Check if file already exists in metadata
+	// Check if file already exists
 	exists, err := s.metaSvc.FileExists(fileName)
 	if err != nil {
 		return err
 	}
 	if exists {
-		return fmt.Errorf("file %s already exists in metadata", fileName)
+		return errorx.WrapWithDetails(errorx.ErrFileAlreadyExists, fileName)
 	}
 
-	// Add file entry to metadata first to prevent race conditions
+	// Add file entry to metadata
 	if err := s.metaSvc.AddFile(fileName, uint64(info.Size())); err != nil {
 		return err
 	}
 
-	// Rollback function to clean up metadata and cloud storage
+	// Rollback function
 	rollback := func(uploadedChunks []string) {
 		for _, chunkName := range uploadedChunks {
-			// Assuming the storage system ID can be obtained from the manager
 			chunkMetaData, found := s.metaSvc.GetChunk(chunkName)
 			if !found {
-				log.Error("chunk %s not found in metadata, skipping deletion", chunkName)
+				log.Error("%v: %s, skipping deletion", errorx.ErrChunkNotFound, chunkName)
 				continue
 			}
 			_ = s.manager.DeleteChunk(chunkMetaData.Storage, chunkName)
 		}
 		_ = s.metaSvc.DeleteFile(fileName)
-
 	}
 
 	chunks, err := s.chunker.ChunkFileStream(file)
@@ -91,7 +89,7 @@ func (s *StorageService) UploadFile(filePath string) error {
 		uploadErr      error
 		mu             sync.Mutex
 		wg             sync.WaitGroup
-		maxParallel    = config.GetConfig().Parallel.Upload // adjust as needed
+		maxParallel    = config.GetConfig().Parallel.Upload
 		sem            = make(chan struct{}, maxParallel)
 	)
 
@@ -102,14 +100,16 @@ func (s *StorageService) UploadFile(filePath string) error {
 		}
 		c := string(chunk.Checksum[:])
 		if exists, _ := s.metaSvc.ChunkExists(chunk.Name); exists {
-			errOnce.Do(func() { uploadErr = fmt.Errorf("chunk %s already exists in metadata", chunk.Name) })
+			errOnce.Do(func() {
+				uploadErr = errorx.WrapWithDetails(errorx.ErrChunkAlreadyExists, chunk.Name)
+			})
 			break
 		}
-		sem <- struct{}{} // acquire slot
+		sem <- struct{}{}
 		wg.Add(1)
 		go func(chunk chunker.Chunk) {
 			defer wg.Done()
-			defer func() { <-sem }() // release slot
+			defer func() { <-sem }()
 			storageLocation, err := s.manager.UploadChunk(chunk.Name, chunk)
 			if err != nil {
 				errOnce.Do(func() { uploadErr = err })
@@ -162,7 +162,7 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 		go func(i int, meta metadata.ChunkMetadata) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			log.Info("Retrieving chunk: %s", meta.ChunkName, meta.Size)
+			log.Info("Retrieving chunk: %s", meta.ChunkName)
 			data, err := s.manager.GetChunk(meta.Storage, meta.ChunkName)
 			if err != nil {
 				errOnce.Do(func() { getErr = err })
@@ -177,7 +177,7 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 	}
 	for _, chunkData := range results {
 		if chunkData == nil {
-			continue // skip missing chunks
+			continue
 		}
 		_, err := w.Write(chunkData)
 		if err != nil {
@@ -187,8 +187,7 @@ func (s *StorageService) GetFile(fileName string, w io.Writer) error {
 	return nil
 }
 
-// DeleteFile deletes all chunks for a file and removes metadata.
-// If any chunk deletion fails, it continues deleting the rest and collects errors.
+// DeleteFile deletes all chunks for a file and removes metadata
 func (s *StorageService) DeleteFile(fileName string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -201,7 +200,7 @@ func (s *StorageService) DeleteFile(fileName string) error {
 	var (
 		deleteErrs  []error
 		wg          sync.WaitGroup
-		maxParallel = config.GetConfig().Parallel.Upload // or Download, as appropriate
+		maxParallel = config.GetConfig().Parallel.Upload
 		sem         = make(chan struct{}, maxParallel)
 		mu          sync.Mutex
 	)
@@ -213,7 +212,7 @@ func (s *StorageService) DeleteFile(fileName string) error {
 			defer func() { <-sem }()
 			if err := s.manager.DeleteChunk(meta.Storage, meta.ChunkName); err != nil {
 				mu.Lock()
-				deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete chunk %s: %w", meta.ChunkName, err))
+				deleteErrs = append(deleteErrs, errorx.WrapWithDetails(errorx.ErrChunkDeleteFailed, meta.ChunkName))
 				mu.Unlock()
 			}
 		}(meta)
@@ -221,7 +220,7 @@ func (s *StorageService) DeleteFile(fileName string) error {
 	wg.Wait()
 
 	if err := s.metaSvc.DeleteFile(fileName); err != nil {
-		deleteErrs = append(deleteErrs, fmt.Errorf("failed to delete file metadata: %w", err))
+		deleteErrs = append(deleteErrs, errorx.Wrap(errorx.ErrFileDeleteFailed, err))
 	}
 
 	if len(deleteErrs) > 0 {

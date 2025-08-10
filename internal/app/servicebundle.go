@@ -1,11 +1,10 @@
 package app
 
 import (
-	"fmt"
-
 	"github.com/sayuyere/storageX/internal/chunker"
 	"github.com/sayuyere/storageX/internal/cloud"
 	"github.com/sayuyere/storageX/internal/config"
+	errorx "github.com/sayuyere/storageX/internal/errors" // unified error constants
 	"github.com/sayuyere/storageX/internal/log"
 	"github.com/sayuyere/storageX/internal/manager"
 	"github.com/sayuyere/storageX/internal/metadata"
@@ -13,9 +12,6 @@ import (
 )
 
 // ServiceBundle aggregates all core services for the CLI
-// Add more fields as you add more services
-// This struct can be passed to CLI command handlers
-
 type ServiceBundle struct {
 	Config   *config.AppConfig
 	Chunker  *chunker.FileChunker
@@ -28,33 +24,39 @@ type ServiceBundle struct {
 func NewServiceBundle(configPath string) (*ServiceBundle, error) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, errorx.Wrap(errorx.ErrConfigLoadFailed, err)
 	}
+
 	log.InitLogger(cfg.Log.Debug)
+
 	ch := chunker.GetChunkerFromConfig()
+
 	meta, err := metadata.NewMetadataServiceFromConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to init metadata: %w", err)
+		return nil, errorx.Wrap(errorx.ErrMetadataInitFailed, err)
 	}
-	// Setup cloud providers (currently only Dropbox, extend as needed)
+
+	// Setup cloud providers
 	var cloudSvcs []cloud.CloudStorage
-	authConfigs := cloud.AuthConfigFromCloudConfig(&cfg.Cloud) // Initialize auth config
-	// This is where you would initialize cloud storage with auth configs
-	// Example for Dropbox, extend as needed for other providers
+	authConfigs := cloud.AuthConfigFromCloudConfig(&cfg.Cloud)
+
 	for _, auth := range authConfigs {
 		if auth.DropboxAccessToken != "" {
 			cloudSvcs = append(cloudSvcs, cloud.NewDropboxStorageWithAuth(auth))
 		}
 	}
-	// If no cloud services configured, return an error
+
 	if len(cloudSvcs) == 0 {
-		return nil, fmt.Errorf("no cloud storage configured in %s", configPath)
+		return nil, errorx.WrapWithDetails(errorx.ErrNoCloudStorageConfigured, configPath)
 	}
+
 	mgr := manager.NewStorageManager(cloudSvcs)
 	for _, svc := range cloudSvcs {
 		mgr.AddCloudStorage(svc)
 	}
+
 	stor := storage.NewStorageService(mgr, meta, ch)
+
 	return &ServiceBundle{
 		Config:   cfg,
 		Chunker:  ch,
