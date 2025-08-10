@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -51,11 +50,11 @@ func ResetConfigSingleton() {
 func LookupSecrets(cfg *AppConfig) {
 	for i := 0; i < len(cfg.Cloud.DropboxAccessTokens); i++ {
 		if cfg.Cloud.DropboxAccessTokens[i] == "" {
-			log.Default().Printf("Warning: Dropbox access token at index %d is empty", i)
+			log.Default().Printf("[StorageX] Warning: Dropbox access token at index %d is empty", i)
 		} else if os.Getenv(cfg.Cloud.DropboxAccessTokens[i]) == "" {
-			log.Default().Printf("Warning: Environment variable for Dropbox access token at index %d is not set", i)
+			log.Default().Printf("[StorageX] Warning: Environment variable for Dropbox access token at index %d is not set", i)
 		} else {
-			log.Default().Printf("Dropbox access token at index %d is set", i)
+			log.Default().Printf("[StorageX] Dropbox access token at index %d is set", i)
 			cfg.Cloud.DropboxAccessTokens[i] = os.Getenv(cfg.Cloud.DropboxAccessTokens[i])
 		}
 	}
@@ -74,7 +73,7 @@ func UpdatePaths(cfg *AppConfig) {
 	// Convert DBPath to absolute path if it's relative
 	if !filepath.IsAbs(cfg.Meta.DBPath) {
 		absPath, err := filepath.Abs(cfg.Meta.DBPath)
-		log.Default().Printf("DBPath updated to absolute path: %s", absPath)
+		log.Default().Printf("[StorageX] DBPath updated to absolute path: %s", absPath)
 		if err == nil {
 			cfg.Meta.DBPath = absPath
 		}
@@ -135,7 +134,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 func GetConfig() *AppConfig {
 	if config == nil {
 		LoadConfig(defaults.DefaultConfigPath)
-		fmt.Println("App config not loaded. Using default config.")
+		log.Default().Printf("[StorageX] App config not loaded. Using default config.")
 	}
 	return config
 }

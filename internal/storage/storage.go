@@ -224,7 +224,7 @@ func (s *StorageService) DeleteFile(fileName string) error {
 	}
 
 	if len(deleteErrs) > 0 {
-		return fmt.Errorf("DeleteFile encountered errors: %v", deleteErrs)
+		return errorx.WrapWithDetails(errorx.ErrFileDeleteFailed, fmt.Sprintf("file: %s, errors: %v", fileName, deleteErrs))
 	}
 	return nil
 }
